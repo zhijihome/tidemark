@@ -11,6 +11,7 @@ env pointer and cannot see outside its own database.
 """
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -86,26 +87,35 @@ def _sandbox_exec(args):
     cmd = str(args.get("command") or "").strip()
     if not cmd:
         return "command is required"
+    timed_out = False
     try:
         r = subprocess.run(["bash", "-c", cmd],
                            cwd=str(args.get("cwd") or "") or None,
                            capture_output=True, text=True,
                            timeout=min(600, int(args.get("timeout") or 60)))
-    except subprocess.TimeoutExpired:
-        return "(timed out — nothing stored)"
-    body = (r.stdout or "") + (r.stderr or "")
-    if r.returncode:
-        body += "\n[exit {0}]".format(r.returncode)
+        body = (r.stdout or "") + (r.stderr or "")
+        if r.returncode:
+            body += "\n[exit {0}]".format(r.returncode)
+    except subprocess.TimeoutExpired as e:
+        # keep whatever already printed — losing it is worse than a partial log
+        def _s(x):
+            return x.decode("utf-8", errors="replace") if isinstance(x, bytes) else (x or "")
+        body = _s(e.stdout) + _s(e.stderr)
+        body += "\n[timed out — partial output]"
+        timed_out = True
+    body = store.redact(body[:SANDBOX_MAX_BYTES])   # secrets never stored nor echoed
     if len(body) <= SANDBOX_INLINE_BYTES:
-        return body or "(no output)"
-    ref = "exec:{0}".format(time.strftime("%Y-%m-%d-%H%M%S"))
-    body = body[:SANDBOX_MAX_BYTES]
+        return body or ("(timed out before any output)" if timed_out else "(no output)")
+    ref = "exec:{0}-{1}".format(time.strftime("%Y-%m-%d-%H%M%S"), secrets.token_hex(2))
     conn = store.connect()
     store.upsert(conn, "sandbox", ref, body,
                  title="{0}…".format(cmd[:80]), at=time.strftime("%Y-%m-%d"))
     conn.commit()
-    return ("{0}\n… [{1} chars stored — ref `{2}`, fetch with sandbox_get]"
-            .format(body[:SANDBOX_INLINE_BYTES], len(body), ref))
+    tail = "… [{0} chars stored — ref `{1}`, fetch with sandbox_get]".format(
+        len(body), ref)
+    if timed_out:
+        tail += " [partial — timed out]"
+    return body[:SANDBOX_INLINE_BYTES] + "\n" + tail
 
 
 def _sandbox_get(args):

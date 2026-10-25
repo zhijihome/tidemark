@@ -63,6 +63,9 @@ All via env or files under `TIDEMARK_HOME` (default `~/.tidemark/`):
 | `autoCompactWindow` (settings.json) | `600k` | auto-compact ceiling the installer seeds — raise/lower to taste, or delete to use the model default. |
 | `TIDEMARK_HANDOFF_DIR` | `~/.tidemark/handoffs` | where `handoff-auto-*.md` files land. Kept out of your repo on purpose — handoffs quote your own messages; a project-dir file is one `git add .` from public. Set this to opt back in. |
 | `TIDEMARK_SANDBOX_INLINE` / `TIDEMARK_SANDBOX_MAX` | `6144` / `8MB` | inline threshold and storage cap for `sandbox_exec` output. |
+
+Sandbox housekeeping: `python3 tidemark/store.py prune --days 30` drops stored
+outputs older than N days (sandbox kind only — memory/handoffs are kept).
 | `TIDEMARK_LANG` | `en` | `zh` for Chinese hook/handoff output. |
 | `watch-dirs.conf` | session cwd | extra dirs whose git state appears in handoffs (one per line). |
 | `services.conf` | — | `name \| url` → curl check, or `launchd:<label>` → launchctl status. |

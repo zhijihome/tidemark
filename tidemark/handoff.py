@@ -104,19 +104,7 @@ def _services(root):
     return out
 
 
-_BEARER_RE = re.compile(r"\bbearer\s+\S+", re.I)
-_SECRET_RE = re.compile(
-    r"((?:authorization|token|passwd|password|api[-_]?key|secret|credential)"
-    r"[\s:=\"']+)(\S+)", re.I)
-_SK_RE = re.compile(r"\b(sk-[A-Za-z0-9_\-]{8,}|ntn_[A-Za-z0-9]{8,}|ghp_[A-Za-z0-9]{8,}|"
-                    r"xox[bap]-[A-Za-z0-9\-]{8,}|AKIA[0-9A-Z]{8,})\b")
-
-
-def _redact(text):
-    """Handoffs quote commands verbatim — never let a credential reach the file."""
-    text = _BEARER_RE.sub("Bearer <redacted>", text)
-    text = _SECRET_RE.sub(lambda m: m.group(1) + "<redacted>", text)
-    return _SK_RE.sub("<redacted>", text)
+_redact = store.redact  # shared credential scrubber — runs on every stored line
 
 
 def _transcript_facts(transcript):

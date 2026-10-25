@@ -54,6 +54,9 @@ git clone <本 repo> && cd tidemark
 | `autoCompactWindow` | `600k` | 安装器写入的自动压缩兜底；删掉就走模型默认 |
 | `TIDEMARK_HANDOFF_DIR` | `~/.tidemark/handoffs` | 交接档落点——故意不落项目目录：交接会引用你的原话，放 repo 里一个 `git add .` 就出去了，要改回自己设 |
 | `TIDEMARK_SANDBOX_INLINE` / `TIDEMARK_SANDBOX_MAX` | `6144` / `8MB` | `sandbox_exec` 输出的内联阈值和存储上限 |
+
+沙箱清理：`python3 tidemark/store.py prune --days 30` 删掉超过 N 天的沙箱输出
+（只清 sandbox 类，记忆/交接不动）。
 | `TIDEMARK_LANG` | `en` | `zh` 出中文钩子输出 |
 | `watch-dirs.conf` | 会话 cwd | 交接里要盯 git 现场的目录（一行一个） |
 | `services.conf` | — | `名字 \| url` 探活，或 `launchd:<label>` |

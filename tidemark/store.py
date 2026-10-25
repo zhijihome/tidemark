@@ -81,6 +81,33 @@ def connect(root=None, env=None):
     return conn
 
 
+_BEARER_RE = re.compile(r"\bbearer\s+\S+", re.I)
+_SECRET_RE = re.compile(
+    r"((?:authorization|token|passwd|password|api[-_]?key|secret|credential)"
+    r"[\s:=\"']+)(\S+)", re.I)
+_SK_RE = re.compile(r"\b(sk-[A-Za-z0-9_\-]{8,}|ntn_[A-Za-z0-9]{8,}|ghp_[A-Za-z0-9]{8,}|"
+                    r"xox[bap]-[A-Za-z0-9\-]{8,}|AKIA[0-9A-Z]{8,})\b")
+
+
+def redact(text):
+    """Strip anything that smells like a credential before it can be written
+    to a file or the library. Cheap insurance — run on every stored string."""
+    text = _BEARER_RE.sub("Bearer <redacted>", text)
+    text = _SECRET_RE.sub(lambda m: m.group(1) + "<redacted>", text)
+    return _SK_RE.sub("<redacted>", text)
+
+
+def prune(conn, days=30, kinds=("sandbox",)):
+    """Drop rows older than `days` in the given kinds (default: sandbox only —
+    big captured outputs are the growth driver). Returns rows removed."""
+    cutoff = time.time() - days * 86400
+    marks = ",".join("?" * len(kinds))
+    cur = conn.execute(
+        "DELETE FROM docs WHERE kind IN ({0}) AND created < ?".format(marks),
+        tuple(kinds) + (cutoff,))
+    return cur.rowcount
+
+
 def _terms(q):
     return [t.replace('"', '""') for t in re.split(r"\s+", q.strip()) if t]
 
@@ -223,9 +250,18 @@ def _cli(argv):
     p.add_argument("--kind", default="")
     p.add_argument("--limit", type=int, default=8)
     sub.add_parser("stats")
+    p = sub.add_parser("prune")
+    p.add_argument("--days", type=int, default=30)
+    p.add_argument("--kinds", default="sandbox")
     a = ap.parse_args(argv)
     root = Path(a.db) if a.db else None
     conn = connect(root=root)
+    if a.cmd == "prune":
+        n = prune(conn, days=a.days, kinds=tuple(
+            k.strip() for k in a.kinds.split(",") if k.strip()))
+        conn.commit()
+        print("pruned {0} rows".format(n))
+        return
     if a.cmd == "ingest":
         text = Path(a.file).read_text(encoding="utf-8") if a.file else sys.stdin.read()
         n = ingest_text(conn, a.kind, a.ref, text, title=a.title, at=a.at)

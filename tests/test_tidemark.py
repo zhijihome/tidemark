@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -224,6 +225,56 @@ class McpProtocolTests(unittest.TestCase):
             capture_output=True, text=True, env=env, timeout=30)
         res2 = json.loads(proc2.stdout.splitlines()[0])
         self.assertIn("x" * 100, res2["result"]["content"][0]["text"])
+
+    def _mcp_call(self, env, name, args):
+        proc = subprocess.run(
+            [sys.executable, str(RELAY / "recall_mcp.py")],
+            input=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                              "params": {"name": name, "arguments": args}}),
+            capture_output=True, text=True, env=env, timeout=30)
+        return json.loads(proc.stdout.splitlines()[0])["result"]["content"][0]["text"]
+
+    def test_same_second_two_execs_dont_collide(self):
+        """shu R2 regression: two big execs in the same second must get distinct refs."""
+        env = dict(os.environ, TIDEMARK_HOME=self._tmpdir())
+        big = "python3 -c \"print('A'*8000)\""
+        t1 = self._mcp_call(env, "sandbox_exec", {"command": big})
+        t2 = self._mcp_call(env, "sandbox_exec", {"command": big})
+        r1 = t1.split("ref `")[1].split("`")[0]
+        r2 = t2.split("ref `")[1].split("`")[0]
+        self.assertNotEqual(r1, r2)
+        got = self._mcp_call(env, "sandbox_get", {"ref": r1})
+        self.assertIn("A" * 100, got)
+
+    def test_sandbox_output_redacted(self):
+        env = dict(os.environ, TIDEMARK_HOME=self._tmpdir())
+        t = self._mcp_call(env, "sandbox_exec", {
+            "command": "python3 -c \"print('TOKEN=abc999\\n' * 4000)\""})
+        self.assertNotIn("abc999", t)
+        ref = t.split("ref `")[1].split("`")[0]
+        got = self._mcp_call(env, "sandbox_get", {"ref": ref})
+        self.assertNotIn("abc999", got)
+        self.assertIn("redacted", got)
+
+    def test_timeout_keeps_partial_output(self):
+        env = dict(os.environ, TIDEMARK_HOME=self._tmpdir(),
+                   TIDEMARK_SANDBOX_INLINE="100")
+        t = self._mcp_call(env, "sandbox_exec", {
+            "command": "python3 -c \"import time,sys; print('P'*20000); sys.stdout.flush(); time.sleep(30)\"",
+            "timeout": 3})
+        self.assertIn("timed out", t)
+        self.assertIn("ref `", t)
+
+    def test_prune_sandbox(self):
+        conn = store.connect(root=Path(self._tmpdir()) / "p")
+        store.upsert(conn, "sandbox", "old", "x" * 5000)
+        store.upsert(conn, "memory", "m", "keep me")
+        conn.execute("UPDATE docs SET created=? WHERE ref='old'", (time.time() - 40 * 86400,))
+        conn.commit()
+        n = store.prune(conn, days=30)
+        conn.commit()
+        self.assertEqual(n, 1)
+        self.assertTrue(store.recall(conn, "keep me"))
 
 
 class WaterlineTests(unittest.TestCase):

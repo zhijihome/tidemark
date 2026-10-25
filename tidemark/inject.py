@@ -21,10 +21,14 @@ MAX_TAIL_CHARS = 1200
 
 def _latest_handoff(payload):
     d = Path(os.environ.get("TIDEMARK_HANDOFF_DIR")
-             or str(payload.get("cwd") or "")
              or (store.default_root() / "handoffs"))
     files = sorted(glob.glob(str(d / "handoff-auto-*.md")),
                    key=os.path.getmtime, reverse=True)
+    if not files:  # project-local handoffs if the user opted in to writing there
+        cwd = str(payload.get("cwd") or "")
+        if cwd:
+            files = sorted(glob.glob(str(Path(cwd) / "handoff-auto-*.md")),
+                           key=os.path.getmtime, reverse=True)
     if not files:  # no auto handoff yet — fall back to any handoff-looking file
         files = sorted(glob.glob(str(d / "*handoff*.md")) +
                        glob.glob(str(d / "*交接*.md")),

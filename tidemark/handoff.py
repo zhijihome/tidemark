@@ -42,12 +42,14 @@ def _L(en, zh):
 
 
 def handoff_dir(payload=None):
-    """Where handoff files land: TIDEMARK_HANDOFF_DIR > session cwd > TIDEMARK_HOME/handoffs."""
+    """Where handoff files land. Default TIDEMARK_HOME/handoffs — deliberately NOT
+    the project dir: handoffs quote the user's own messages and commands, and a
+    file sitting in a repo is one `git add .` away from being published.
+    Opt a project back in with TIDEMARK_HANDOFF_DIR if you actually want that."""
     env = os.environ.get("TIDEMARK_HANDOFF_DIR")
     if env:
         return Path(env)
-    cwd = str((payload or {}).get("cwd") or "")
-    return Path(cwd) if cwd else store.default_root() / "handoffs"
+    return store.default_root() / "handoffs"
 
 
 def _cfg_dirs(root, cwd):
@@ -102,9 +104,25 @@ def _services(root):
     return out
 
 
+_BEARER_RE = re.compile(r"\bbearer\s+\S+", re.I)
+_SECRET_RE = re.compile(
+    r"((?:authorization|token|passwd|password|api[-_]?key|secret|credential)"
+    r"[\s:=\"']+)(\S+)", re.I)
+_SK_RE = re.compile(r"\b(sk-[A-Za-z0-9_\-]{8,}|ntn_[A-Za-z0-9]{8,}|ghp_[A-Za-z0-9]{8,}|"
+                    r"xox[bap]-[A-Za-z0-9\-]{8,}|AKIA[0-9A-Z]{8,})\b")
+
+
+def _redact(text):
+    """Handoffs quote commands verbatim — never let a credential reach the file."""
+    text = _BEARER_RE.sub("Bearer <redacted>", text)
+    text = _SECRET_RE.sub(lambda m: m.group(1) + "<redacted>", text)
+    return _SK_RE.sub("<redacted>", text)
+
+
 def _transcript_facts(transcript):
     """Mechanical transcript extraction: user text (system-reminder/tool-result
-    stripped), edited file paths, notable shell commands."""
+    stripped), edited file paths, notable shell commands. All output is run
+    through _redact before it can reach a file."""
     users, files, cmds = [], [], []
     cmd_re = re.compile(r"\bgit\b|ssh |curl |launchctl|npm |pytest|make ", re.I)
     try:
@@ -131,7 +149,7 @@ def _transcript_facts(transcript):
                     text = re.sub(r"<(system-reminder|ide_)[^>]*>.*?</\\1>", "", text, flags=re.S)
                     text = text.strip()
                     if text and not text.startswith(("<command-", "Caveat:", "This session")):
-                        users.append(text[:200])
+                        users.append(_redact(text[:200]))
                 elif t == "assistant":
                     for c in (msg.get("content") or []):
                         if not isinstance(c, dict) or c.get("type") != "tool_use":
@@ -145,7 +163,7 @@ def _transcript_facts(transcript):
                         elif name == "Bash":
                             cmd = str(inp.get("command") or "")
                             if cmd_re.search(cmd):
-                                cmds.append(cmd.split("\n")[0][:160])
+                                cmds.append(_redact(cmd.split("\n")[0][:160]))
     except OSError:
         pass
     return users[-MAX_USER_LINES:], files[-MAX_EDIT_FILES:], cmds[-MAX_CMDS:]

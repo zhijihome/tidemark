@@ -104,6 +104,31 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(len(users), 1)
         self.assertLessEqual(len(users[0]), 200)
 
+    def test_commands_redacted(self):
+        """Secrets in argv must never reach a handoff file."""
+        p = Path(self.tmp.name) / "t3.jsonl"
+        rows = [{"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Bash", "input": {
+                "command": "curl -H 'Authorization: Bearer abc123SECRET' https://x | git log"}},
+            {"type": "tool_use", "name": "Bash", "input": {
+                "command": "npm login --password=hunter2"}},
+            {"type": "tool_use", "name": "Bash", "input": {
+                "command": "curl -H 'x-api-key: sk-1234567890abcdef' https://api.x"}},
+        ]}}]
+        p.write_text("\n".join(json.dumps(r) for r in rows))
+        _, _, cmds = handoff._transcript_facts(str(p))
+        joined = " ".join(cmds)
+        self.assertNotIn("abc123SECRET", joined)
+        self.assertNotIn("hunter2", joined)
+        self.assertNotIn("sk-1234567890abcdef", joined)
+        self.assertIn("redacted", joined)
+
+    def test_handoff_dir_not_project(self):
+        """Default handoff dir must NOT be inside the user's repo."""
+        d = handoff.handoff_dir({"cwd": "/some/user/project"})
+        self.assertNotEqual(str(d), "/some/user/project")
+        self.assertIn("handoffs", str(d))
+
 
 class InjectTests(unittest.TestCase):
     def test_inject_prints_handoff(self):
@@ -172,7 +197,33 @@ class McpProtocolTests(unittest.TestCase):
         self.assertEqual(lines[0]["result"]["serverInfo"]["name"], "tidemark")
         names = [t["name"] for t in lines[1]["result"]["tools"]]
         self.assertIn("memory_recall", names)
+        self.assertIn("sandbox_exec", names)
         self.assertIn("content", lines[2]["result"])
+
+    def test_sandbox_exec_get_roundtrip(self):
+        env = dict(os.environ, TIDEMARK_HOME=self._tmpdir())
+        big = "seq 1 400"     # ~1600 chars? force bigger:
+        big = "python3 -c \"print('x'*20000)\""
+        proc = subprocess.run(
+            [sys.executable, str(RELAY / "recall_mcp.py")],
+            input="\n".join([
+                json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                            "params": {"name": "sandbox_exec",
+                                       "arguments": {"command": big}}}),
+            ]),
+            capture_output=True, text=True, env=env, timeout=30)
+        res = json.loads(proc.stdout.splitlines()[0])
+        text = res["result"]["content"][0]["text"]
+        self.assertIn("stored", text)
+        ref = text.split("ref `")[1].split("`")[0]
+        proc2 = subprocess.run(
+            [sys.executable, str(RELAY / "recall_mcp.py")],
+            input=json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                              "params": {"name": "sandbox_get",
+                                         "arguments": {"ref": ref}}}),
+            capture_output=True, text=True, env=env, timeout=30)
+        res2 = json.loads(proc2.stdout.splitlines()[0])
+        self.assertIn("x" * 100, res2["result"]["content"][0]["text"])
 
 
 class WaterlineTests(unittest.TestCase):

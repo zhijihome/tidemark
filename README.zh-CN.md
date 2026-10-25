@@ -16,7 +16,7 @@
 | `waterline.py` | `UserPromptSubmit` | 每轮扫 transcript 真实 token 用量，过线就往上下文塞一句「该 /clear 了」——每窗只喊一次，跌回 80% 重新武装 |
 | `handoff.py` | `PreCompact` + `SessionEnd(clear)` | 机械抽取本窗做的事（用户话/改的文件/git 现场/服务探活）写成 `handoff-auto-<ts>.md` 并入库 |
 | `inject.py` | `SessionStart` | 开窗/压缩/clear 后把最新交接+在途尾段塞进新窗上下文 |
-| `recall_mcp.py` | stdio MCP | `memory_recall` / `memory_stats` 两个工具查库 |
+| `recall_mcp.py` | stdio MCP | `memory_recall` / `memory_stats` 查库，外加自带沙箱：`sandbox_exec` 跑命令、大输出整存进库只回前段+引用，`sandbox_get` 按需取回。**单装即完整**，context-mode 是选配不是依赖 |
 | `store.py` | 库+CLI | SQLite FTS5 **trigram 分词**——中文子串真能查（unicode61 查不到「新版本」）；段落级存储、幂等、隔离硬闸 |
 | `sync.py` | cron/手动 | 喂库：CC 记忆文件、交接档、任意 md 目录、tail 尾段缓存 |
 
@@ -52,7 +52,8 @@ git clone <本 repo> && cd tidemark
 |---|---|---|
 | `TIDEMARK_WATERLINE_TOKENS` | `400000` | 提醒线。200k 窗口建议 ~140k |
 | `autoCompactWindow` | `600k` | 安装器写入的自动压缩兜底；删掉就走模型默认 |
-| `TIDEMARK_HANDOFF_DIR` | 会话 cwd | 交接档落点 |
+| `TIDEMARK_HANDOFF_DIR` | `~/.tidemark/handoffs` | 交接档落点——故意不落项目目录：交接会引用你的原话，放 repo 里一个 `git add .` 就出去了，要改回自己设 |
+| `TIDEMARK_SANDBOX_INLINE` / `TIDEMARK_SANDBOX_MAX` | `6144` / `8MB` | `sandbox_exec` 输出的内联阈值和存储上限 |
 | `TIDEMARK_LANG` | `en` | `zh` 出中文钩子输出 |
 | `watch-dirs.conf` | 会话 cwd | 交接里要盯 git 现场的目录（一行一个） |
 | `services.conf` | — | `名字 \| url` 探活，或 `launchd:<label>` |

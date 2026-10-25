@@ -2,11 +2,7 @@
 
 **Claude Code 自动换窗套件——新窗只带一份总结，其余全留在沙箱里。**
 
-配合 [context-mode](https://github.com/mksglu/context-mode) 用（也可单用）。
-
-> **许可说明**：context-mode 是 Elastic License 2.0（source-available，非 OSI
-> 开源）。tidemark 不带它一行代码——只**只读**它落在磁盘的沙箱 db，README 里
-> 当推荐搭配。没有打包就没有许可传导，随便用。
+配合 [context-mode](https://github.com/mksglu/context-mode) 用（也可单用）：
 
 - **context-mode** 管「东西不进窗」：大输出进它的 SQLite 沙箱，`ctx_*` 工具随查随取。
 - **tidemark** 管「换窗仪式」：水位线到点提醒 → 机械生成交接 → 你 `/clear` → 新窗打开就带着总结，外加沙箱库指针，`ctx_*` 接着查上一窗的产物。

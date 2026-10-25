@@ -6,12 +6,7 @@ everything else in the sandbox.**
 [中文说明](README.zh-CN.md)
 
 tidemark is a small hook + MCP bundle that pairs with
-[context-mode](https://github.com/mksglu/context-mode) (or stands alone).
-
-> **License note:** context-mode is Elastic License 2.0, not OSI open source.
-> tidemark ships **zero** context-mode code — it only reads the session DBs
-> context-mode leaves on disk (read-only) and names it as a recommended
-> companion. Nothing to bundle, nothing to relicense.
+[context-mode](https://github.com/mksglu/context-mode) (or stands alone):
 
 - **context-mode** keeps bulk output out of your context (it lives in a SQLite
   sandbox, queryable via `ctx_*` tools).

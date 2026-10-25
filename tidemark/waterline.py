@@ -10,7 +10,7 @@ and /clear — your handoff is already prepared".
 Fires once per crossing per window; rearms after usage drops below 80% of the
 threshold.
 
-Threshold: RELAY_WATERLINE_TOKENS (default 400k — sane for 1M windows; for
+Threshold: TIDEMARK_WATERLINE_TOKENS (default 400k — sane for 1M windows; for
 200k windows use ~140k).
 """
 import json
@@ -19,13 +19,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import relay_store  # noqa: E402
+import store  # noqa: E402
 
-THRESHOLD = int(os.environ.get("RELAY_WATERLINE_TOKENS") or "400000")
-STATE = relay_store.default_root() / "waterline-state.json"
+THRESHOLD = int(os.environ.get("TIDEMARK_WATERLINE_TOKENS") or "400000")
+STATE = store.default_root() / "waterline-state.json"
 TAIL_BYTES = 64 * 1024
 
-_ZH = os.environ.get("RELAY_LANG", "").lower().startswith("zh")
+_ZH = os.environ.get("TIDEMARK_LANG", "").lower().startswith("zh")
 
 
 def _latest_ctx(transcript):

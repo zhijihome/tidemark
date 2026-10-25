@@ -13,16 +13,16 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import relay_store  # noqa: E402
+import store  # noqa: E402
 
-MAX_HANDOFF_CHARS = int(os.environ.get("RELAY_INJECT_CHARS") or "2600")
+MAX_HANDOFF_CHARS = int(os.environ.get("TIDEMARK_INJECT_CHARS") or "2600")
 MAX_TAIL_CHARS = 1200
 
 
 def _latest_handoff(payload):
-    d = Path(os.environ.get("RELAY_HANDOFF_DIR")
+    d = Path(os.environ.get("TIDEMARK_HANDOFF_DIR")
              or str(payload.get("cwd") or "")
-             or (relay_store.default_root() / "handoffs"))
+             or (store.default_root() / "handoffs"))
     files = sorted(glob.glob(str(d / "handoff-auto-*.md")),
                    key=os.path.getmtime, reverse=True)
     if not files:  # no auto handoff yet — fall back to any handoff-looking file
@@ -38,8 +38,8 @@ def main():
     except (ValueError, OSError):
         payload = {}
     source = payload.get("source") or "?"
-    root = relay_store.default_root()
-    out = ["[relay] handoff injected (source={0})".format(source)]
+    root = store.default_root()
+    out = ["[tidemark] handoff injected (source={0})".format(source)]
     f = _latest_handoff(payload)
     if f:
         body = Path(f).read_text(encoding="utf-8", errors="replace")[:MAX_HANDOFF_CHARS]

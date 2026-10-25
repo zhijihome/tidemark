@@ -3,7 +3,7 @@
 
 Reads the hook stdin JSON (session_id / transcript_path / cwd / trigger|reason),
 mechanically extracts what the window did — never calls a model — and writes
-`handoff-auto-<ts>.md` plus ingests it into the relay store.
+`handoff-auto-<ts>.md` plus ingests it into the tidemark store.
 
 Collected:
 - Scene: git branch/HEAD/dirty-count for every dir in `watch-dirs.conf`
@@ -11,7 +11,7 @@ Collected:
   `services.conf` (lines "name | url" → curl, or "launchd:<label>").
 - This window: recent user messages, Write/Edit file paths, notable Bash
   commands — pulled from the session transcript.
-- Open threads: `tail.md` cache maintained by relay_sync (or by hand).
+- Open threads: `tail.md` cache maintained by sync (or by hand).
 - Sandbox pointer: latest context-mode session db for this project, so the
   next window can keep querying its artifacts.
 
@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import relay_store  # noqa: E402
+import store  # noqa: E402
 
 CONF_DIRS = "watch-dirs.conf"
 CONF_SERVICES = "services.conf"
@@ -34,7 +34,7 @@ MAX_USER_LINES = 12
 MAX_EDIT_FILES = 12
 MAX_CMDS = 15
 
-_ZH = os.environ.get("RELAY_LANG", "").lower().startswith("zh")
+_ZH = os.environ.get("TIDEMARK_LANG", "").lower().startswith("zh")
 
 
 def _L(en, zh):
@@ -42,12 +42,12 @@ def _L(en, zh):
 
 
 def handoff_dir(payload=None):
-    """Where handoff files land: RELAY_HANDOFF_DIR > session cwd > RELAY_HOME/handoffs."""
-    env = os.environ.get("RELAY_HANDOFF_DIR")
+    """Where handoff files land: TIDEMARK_HANDOFF_DIR > session cwd > TIDEMARK_HOME/handoffs."""
+    env = os.environ.get("TIDEMARK_HANDOFF_DIR")
     if env:
         return Path(env)
     cwd = str((payload or {}).get("cwd") or "")
-    return Path(cwd) if cwd else relay_store.default_root() / "handoffs"
+    return Path(cwd) if cwd else store.default_root() / "handoffs"
 
 
 def _cfg_dirs(root, cwd):
@@ -154,7 +154,7 @@ def _transcript_facts(transcript):
 def _ctx_pointer(cwd=""):
     """context-mode sandbox pointer: the project's most recent session db, so the
     next window can keep querying its artifacts with ctx_* tools."""
-    root = Path(os.environ.get("RELAY_CTX_SESSIONS")
+    root = Path(os.environ.get("TIDEMARK_CTX_SESSIONS")
                 or (Path.home() / ".claude" / "context-mode" / "sessions"))
     try:
         import glob
@@ -193,12 +193,12 @@ def _tail(root):
     p = Path(root) / "tail.md"
     if p.is_file():
         return p.read_text(encoding="utf-8", errors="replace").strip()[:1500]
-    return _L("(no tail cache yet — one run of relay_sync creates it)",
-              "（tail 缓存还没有——跑过一次 relay_sync 就有了）")
+    return _L("(no tail cache yet — one run of sync creates it)",
+              "（tail 缓存还没有——跑过一次 sync 就有了）")
 
 
 def build(payload, root=None, now=None):
-    root = root or relay_store.default_root()
+    root = root or store.default_root()
     ts = now or time.strftime("%Y-%m-%d-%H%M")
     trig = payload.get("trigger") or payload.get("reason") or "?"
     lines = ["# handoff-auto ({0} · session {1} · trigger {2})".format(
@@ -236,8 +236,8 @@ def build(payload, root=None, now=None):
 
 
 def ingest_handoff(md, ts, root=None):
-    conn = relay_store.connect(root=root)
-    n = relay_store.ingest_text(conn, "handoff", "handoff:auto:{0}".format(ts), md,
+    conn = store.connect(root=root)
+    n = store.ingest_text(conn, "handoff", "handoff:auto:{0}".format(ts), md,
                                 title="handoff-auto-{0}".format(ts), at=ts)
     conn.commit()
     return n
@@ -255,9 +255,9 @@ def main():
         d.mkdir(parents=True, exist_ok=True)
         (d / "handoff-auto-{0}.md".format(ts)).write_text(md, encoding="utf-8")
         n = ingest_handoff(md, ts)
-        print("[relay-handoff] handoff-auto-{0}.md written, {1} segments ingested".format(ts, n))
+        print("[tidemark-handoff] handoff-auto-{0}.md written, {1} segments ingested".format(ts, n))
     except Exception as exc:  # a hook must never block
-        print("[relay-handoff] handoff failed (not blocking): {0}".format(exc), file=sys.stderr)
+        print("[tidemark-handoff] handoff failed (not blocking): {0}".format(exc), file=sys.stderr)
     sys.exit(0)
 
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""relay store — standalone recall library for window-rotation handoffs.
+"""tidemark store — standalone recall library for window-rotation handoffs.
 
 Fully self-contained: its own directory, its own SQLite file, a fixed
 `resident` tag per row. It never reads another app's database or env vars —
-the only pointer it honours is RELAY_HOME (used by tests / custom installs).
+the only pointer it honours is TIDEMARK_HOME (used by tests / custom installs).
 
 Storage: SQLite FTS5 (ships with every modern Python). Documents are stored
 in *paragraph-sized segments* — the smallest recall unit. `(kind, ref)` is an
@@ -16,12 +16,12 @@ import sys
 import time
 from pathlib import Path
 
-RESIDENT = "relay"
+RESIDENT = 'tidemark'
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS docs (
   rowid INTEGER PRIMARY KEY,
-  resident TEXT NOT NULL DEFAULT 'relay',
+  resident TEXT NOT NULL DEFAULT 'tidemark',
   kind TEXT NOT NULL,           -- handoff / card / verdict / memory / taskbook / note …
   ref TEXT NOT NULL,            -- source anchor: path#heading, page#segment …
   title TEXT NOT NULL DEFAULT '',
@@ -48,13 +48,13 @@ END;
 
 
 def default_root(env=None):
-    """Library root: RELAY_HOME overrides (tests / custom installs)."""
+    """Library root: TIDEMARK_HOME overrides (tests / custom installs)."""
     env = os.environ if env is None else env
-    return Path(env.get("RELAY_HOME") or (Path.home() / ".session-relay"))
+    return Path(env.get("TIDEMARK_HOME") or (Path.home() / ".tidemark"))
 
 
 def db_path(root=None, env=None):
-    return (root or default_root(env)) / "relay.sqlite3"
+    return (root or default_root(env)) / "tidemark.sqlite3"
 
 
 def _tokenizer(conn):
@@ -77,7 +77,7 @@ def connect(root=None, env=None):
     # Isolation red line: only our rows may live here — refuse a polluted db.
     n = conn.execute("SELECT COUNT(*) FROM docs WHERE resident != ?", (RESIDENT,)).fetchone()[0]
     if n:
-        raise RuntimeError("relay store contains foreign rows ({0}); refusing to use it".format(n))
+        raise RuntimeError("tidemark store contains foreign rows ({0}); refusing to use it".format(n))
     return conn
 
 
@@ -209,8 +209,8 @@ def stats(conn):
 
 def _cli(argv):
     import argparse
-    ap = argparse.ArgumentParser(prog="relay_store")
-    ap.add_argument("--db", default="", help="library root (default ~/.session-relay)")
+    ap = argparse.ArgumentParser(prog="store")
+    ap.add_argument("--db", default="", help="library root (default ~/.tidemark)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("ingest")
     p.add_argument("kind")

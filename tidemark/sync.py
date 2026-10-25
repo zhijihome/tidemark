@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""relay sync — the write side: periodically feed segments into the library.
+"""tidemark sync — the write side: periodically feed segments into the library.
 
 Sources (all read-only, idempotent upserts — re-running never duplicates):
   1. Claude Code memory files  ~/.claude/projects/*/memory/*.md   → kind=memory
-  2. Handoff files             $RELAY_HANDOFF_DIR or scanned dirs → kind=handoff
+  2. Handoff files             $TIDEMARK_HANDOFF_DIR or scanned dirs → kind=handoff
      (handoff-auto-*.md plus any *handoff*.md / *交接*.md)
-  3. Anything else             via `relay_store.py ingest <kind> <ref> --file f`
+  3. Anything else             via `store.py ingest <kind> <ref> --file f`
      or drop a directory of .md into sync-dirs.conf (one per line) → kind=note
 
 Also maintains `tail.md` — the "open threads" block injected into handoffs and
 new windows. Default: keep the last 1500 chars of `tail-src.md` if present,
 otherwise leave whatever you wrote there by hand.
 
-Usage: python3 relay_sync.py [--all] [--memories] [--handoffs] [--dirs] [--tail]
+Usage: python3 sync.py [--all] [--memories] [--handoffs] [--dirs] [--tail]
 """
 import glob
 import json
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import relay_store  # noqa: E402
+import store  # noqa: E402
 
 CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
 CONF_SYNC_DIRS = "sync-dirs.conf"
@@ -39,7 +39,7 @@ def sync_memories(conn):
     if not CLAUDE_PROJECTS.is_dir():
         return 0
     for f in sorted(CLAUDE_PROJECTS.glob("*/memory/*.md")):
-        n += relay_store.ingest_text(conn, "memory",
+        n += store.ingest_text(conn, "memory",
                                      "memory:{0}:{1}".format(f.parent.parent.name, f.name),
                                      f.read_text(encoding="utf-8", errors="replace"),
                                      title=f.stem, at=_mtime_iso(f))
@@ -47,9 +47,9 @@ def sync_memories(conn):
 
 
 def sync_handoffs(conn, root):
-    """Handoff files: RELAY_HANDOFF_DIR, else every dir in watch-dirs.conf."""
+    """Handoff files: TIDEMARK_HANDOFF_DIR, else every dir in watch-dirs.conf."""
     dirs = []
-    env = os.environ.get("RELAY_HANDOFF_DIR")
+    env = os.environ.get("TIDEMARK_HANDOFF_DIR")
     if env:
         dirs.append(env)
     conf = Path(root) / "watch-dirs.conf"
@@ -61,7 +61,7 @@ def sync_handoffs(conn, root):
         for pat in HANDOFF_PATTERNS:
             for f in sorted(glob.glob(str(Path(d) / pat))):
                 p = Path(f)
-                n += relay_store.ingest_text(conn, "handoff", "handoff:{0}".format(p.name),
+                n += store.ingest_text(conn, "handoff", "handoff:{0}".format(p.name),
                                              p.read_text(encoding="utf-8", errors="replace"),
                                              title=p.stem, at=_mtime_iso(p))
     return n
@@ -78,7 +78,7 @@ def sync_dirs(conn, root):
         if not d or d.startswith("#"):
             continue
         for f in sorted(Path(d).glob("*.md")):
-            n += relay_store.ingest_text(conn, "note", "note:{0}:{1}".format(d, f.name),
+            n += store.ingest_text(conn, "note", "note:{0}:{1}".format(d, f.name),
                                          f.read_text(encoding="utf-8", errors="replace"),
                                          title=f.stem, at=_mtime_iso(f))
     return n
@@ -96,8 +96,8 @@ def sync_tail(root):
 
 def main(argv):
     do_all = "--all" in argv or not any(a.startswith("--") for a in argv)
-    root = relay_store.default_root()
-    conn = relay_store.connect(root=root)
+    root = store.default_root()
+    conn = store.connect(root=root)
     report = {}
     if do_all or "--memories" in argv:
         report["memories"] = sync_memories(conn)

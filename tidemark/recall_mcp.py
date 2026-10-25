@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""relay recall — stdio MCP server for the handoff/memory library.
+"""tidemark recall — stdio MCP server for the handoff/memory library.
 
 Register in .mcp.json:
-{"mcpServers":{"session-relay":{"command":"python3",
- "args":["/path/to/relay/relay_recall_mcp.py"]}}}
+{"mcpServers":{"tidemark":{"command":"python3",
+ "args":["/path/to/tidemark/recall_mcp.py"]}}}
 
 Returns only relevant segments: FTS bm25 ranking + kind/date filters. The
-library is fixed to RELAY_HOME (or ~/.session-relay) — it honours no other
+library is fixed to TIDEMARK_HOME (or ~/.tidemark) — it honours no other
 env pointer and cannot see outside its own database.
 """
 import json
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import relay_store  # noqa: E402
+import store  # noqa: E402
 
 RECALL_TOOL = {
     "name": "memory_recall",
@@ -54,16 +54,16 @@ def _reply(mid, result=None, error=None):
 
 
 def _call(name, args):
-    conn = relay_store.connect()
+    conn = store.connect()
     if name == "memory_stats":
-        s = relay_store.stats(conn)
+        s = store.stats(conn)
         return "\n".join("{0}: {1} segments, latest {2}".format(k, v["rows"], v["latest_at"] or "-")
                          for k, v in s.items()) or "(empty)"
     q = str(args.get("query") or "").strip()
     if not q:
         return "query is required"
     kinds = [k.strip() for k in str(args.get("kind") or "").split(",") if k.strip()] or None
-    hits = relay_store.recall(conn, q, kinds=kinds,
+    hits = store.recall(conn, q, kinds=kinds,
                               limit=max(1, min(20, int(args.get("limit") or 8))),
                               after=str(args.get("after") or ""),
                               before=str(args.get("before") or ""))
@@ -88,7 +88,7 @@ def main():
         if method == "initialize":
             _reply(mid, {"protocolVersion": (req.get("params") or {}).get("protocolVersion") or "2024-11-05",
                          "capabilities": {"tools": {}},
-                         "serverInfo": {"name": "session-relay", "version": "1"}})
+                         "serverInfo": {"name": "tidemark", "version": "1"}})
         elif method == "tools/list":
             _reply(mid, {"tools": [RECALL_TOOL, STATS_TOOL]})
         elif method == "tools/call":

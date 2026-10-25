@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import store  # noqa: E402
+import drivers  # noqa: E402
 
 THRESHOLD = int(os.environ.get("TIDEMARK_WATERLINE_TOKENS") or "400000")
 STATE = store.default_root() / "waterline-state.json"
@@ -28,40 +29,8 @@ TAIL_BYTES = 64 * 1024
 _ZH = os.environ.get("TIDEMARK_LANG", "").lower().startswith("zh")
 
 
-def _latest_ctx(transcript):
-    # The transcript tail is often hundreds of KB of prompt_snapshot lines with
-    # no usage record — widen the window until one shows up.
-    try:
-        size = os.path.getsize(transcript)
-    except OSError:
-        return 0
-    span = TAIL_BYTES
-    while True:
-        ctx = _ctx_in_tail(transcript, size, span)
-        if ctx or span >= size:
-            return ctx
-        span *= 8
-
-
-def _ctx_in_tail(transcript, size, span):
-    try:
-        with open(transcript, "rb") as f:
-            f.seek(max(0, size - span))
-            tail = f.read().decode("utf-8", errors="replace")
-    except OSError:
-        return 0
-    ctx = 0
-    for line in tail.splitlines():
-        try:
-            ev = json.loads(line)
-        except ValueError:
-            continue
-        u = ((ev.get("message") or {}).get("usage") or {})
-        if ev.get("type") == "assistant" and u:
-            ctx = int(u.get("input_tokens") or 0) \
-                + int(u.get("cache_read_input_tokens") or 0) \
-                + int(u.get("cache_creation_input_tokens") or 0)
-    return ctx
+def _latest_ctx(transcript, driver=""):
+    return drivers.latest_ctx(transcript, driver=driver or drivers.detect(transcript))
 
 
 def _state():
@@ -85,7 +54,8 @@ def main():
     except (ValueError, OSError):
         sys.exit(0)
     sid = str(payload.get("session_id") or "?")
-    ctx = _latest_ctx(str(payload.get("transcript_path") or ""))
+    ref = str(payload.get("transcript_path") or payload.get("session_db") or "")
+    ctx = _latest_ctx(ref, driver=str(payload.get("agent") or ""))
     st = _state()
     armed = st.get("session") != sid or st.get("ctx", 0) < int(THRESHOLD * 0.8)
     st.update({"session": sid, "ctx": ctx})

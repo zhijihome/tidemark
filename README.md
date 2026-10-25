@@ -6,7 +6,13 @@ everything else in the sandbox.**
 [中文说明](README.zh-CN.md)
 
 tidemark is a small hook + MCP bundle that pairs with
-[context-mode](https://github.com/mksglu/context-mode) (or stands alone):
+[context-mode](https://github.com/mksglu/context-mode) (or stands alone).
+
+**Not just Claude Code.** The MCP side (recall + sandbox) works in any
+MCP-capable agent. The hook side speaks a tiny stdin-JSON payload, and
+`drivers.py` adapts transcript formats — Claude Code and Devin CLI drivers
+ship today, a generic jsonl fallback covers the rest. Agents without hooks
+run the ritual by hand: `bin/tidemark handoff|inject|waterline`.
 
 - **context-mode** keeps bulk output out of your context (it lives in a SQLite
   sandbox, queryable via `ctx_*` tools).
@@ -72,6 +78,18 @@ outputs older than N days (sandbox kind only — memory/handoffs are kept).
 | `sync-dirs.conf` | — | extra `.md` dirs synced into the library as `kind=note`. |
 | `tail-src.md` | — | source for the open-threads `tail.md` cache. |
 | `TIDEMARK_CTX_SESSIONS` | `~/.claude/context-mode/sessions` | where context-mode session DBs live. |
+
+## Other agents
+
+| Agent | What works | How |
+|---|---|---|
+| Claude Code | everything | `./install.sh` (hooks + MCP) |
+| Devin CLI | MCP tools + `bin/tidemark` ritual | add `tidemark` to `mcp_config.json`; transcripts are read from `sessions.db` (`--agent devin` or a `.db` path auto-detects) |
+| Gemini CLI / Codex | MCP + manual ritual | register the MCP; call `bin/tidemark handoff` on `/clear`-equivalents until a driver lands |
+| anything else | library + CLI | `store.py ingest/recall`, `bin/tidemark sync` |
+
+Drivers live in `tidemark/drivers.py`: implement `latest_ctx` + `extract_facts`
+for your agent's session format and PR it — that's the whole interface.
 
 ## Privacy / scope
 

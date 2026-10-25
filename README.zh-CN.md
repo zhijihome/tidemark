@@ -2,7 +2,12 @@
 
 **Claude Code 自动换窗套件——新窗只带一份总结，其余全留在沙箱里。**
 
-配合 [context-mode](https://github.com/mksglu/context-mode) 用（也可单用）：
+配合 [context-mode](https://github.com/mksglu/context-mode) 用（也可单用）。
+
+**不止 Claude Code**：MCP 那半任何吃 MCP 的 agent 都能挂；钩子那半是
+stdin-JSON 小协议，`drivers.py` 管 transcript 格式适配——现成驱动有
+Claude Code 和 Devin CLI，通用 jsonl 兜底。没钩子的 agent 直接跑
+`bin/tidemark handoff|inject|waterline` 手动走仪式。
 
 - **context-mode** 管「东西不进窗」：大输出进它的 SQLite 沙箱，`ctx_*` 工具随查随取。
 - **tidemark** 管「换窗仪式」：水位线到点提醒 → 机械生成交接 → 你 `/clear` → 新窗打开就带着总结，外加沙箱库指针，`ctx_*` 接着查上一窗的产物。

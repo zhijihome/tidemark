@@ -16,6 +16,52 @@ sys.path.insert(0, str(RELAY))
 import store  # noqa: E402
 import handoff  # noqa: E402
 import sync  # noqa: E402
+import drivers  # noqa: E402
+
+
+class DevinDriverTests(unittest.TestCase):
+    """Devin transcript = sessions.db with message_nodes.chat_message JSON."""
+
+    def _db(self):
+        import sqlite3
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        db = str(Path(tmp.name) / "sessions.db")
+        c = sqlite3.connect(db)
+        c.execute("CREATE TABLE sessions(id TEXT PRIMARY KEY, last_activity_at INTEGER)")
+        c.execute("CREATE TABLE message_nodes(row_id INTEGER PRIMARY KEY,"
+                  " session_id TEXT, node_id INTEGER, parent_node_id INTEGER,"
+                  " chat_message TEXT, created_at INTEGER, metadata TEXT)")
+        c.execute("INSERT INTO sessions VALUES('s1', 100)")
+        msgs = [
+            ("user", {"role": "user", "content": "ship the MCP plane"}, None),
+            ("assistant", {"role": "assistant", "content": "", "tool_calls": [
+                {"name": "edit", "arguments": {"file_path": "/x/mcp.py"}},
+                {"name": "exec", "arguments": {"command": "git commit -m x"}}]},
+             {"num_tokens_preceding": 161718}),
+            ("assistant", {"role": "assistant", "content": "done"},
+             {"num_tokens_preceding": 162000}),
+        ]
+        for i, (role, m, meta) in enumerate(msgs):
+            c.execute("INSERT INTO message_nodes(session_id,node_id,chat_message,"
+                      "created_at,metadata) VALUES('s1',?,?,?,?)",
+                      (i, json.dumps(m), i, json.dumps(meta) if meta else None))
+        c.commit(); c.close()
+        return db
+
+    def test_devin_ctx(self):
+        self.assertEqual(drivers.latest_ctx(self._db(), driver="devin"), 162000)
+
+    def test_devin_facts(self):
+        users, files, cmds = drivers.extract_facts(self._db(), driver="devin")
+        self.assertIn("ship the MCP plane", users[0])
+        self.assertIn("/x/mcp.py", files[0])
+        self.assertTrue(any("git commit" in c for c in cmds))
+
+    def test_detect_db_is_devin(self):
+        self.assertEqual(drivers.detect("/x/y/sessions.db"), "devin")
+        self.assertEqual(drivers.detect("/x/t.jsonl"), "claude")
+        self.assertEqual(drivers.detect("", {"agent": "devin"}), "devin")
 
 
 class StoreTests(unittest.TestCase):

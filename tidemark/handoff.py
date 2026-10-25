@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import store  # noqa: E402
+import drivers  # noqa: E402
 
 CONF_DIRS = "watch-dirs.conf"
 CONF_SERVICES = "services.conf"
@@ -107,54 +108,12 @@ def _services(root):
 _redact = store.redact  # shared credential scrubber — runs on every stored line
 
 
-def _transcript_facts(transcript):
-    """Mechanical transcript extraction: user text (system-reminder/tool-result
-    stripped), edited file paths, notable shell commands. All output is run
-    through _redact before it can reach a file."""
-    users, files, cmds = [], [], []
-    cmd_re = re.compile(r"\bgit\b|ssh |curl |launchctl|npm |pytest|make ", re.I)
-    try:
-        with open(transcript, "r", encoding="utf-8", errors="replace") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    ev = json.loads(line)
-                except ValueError:
-                    continue
-                t = ev.get("type")
-                msg = ev.get("message") or {}
-                if t == "user":
-                    content = msg.get("content")
-                    if isinstance(content, str):
-                        text = content
-                    elif isinstance(content, list):
-                        text = " ".join(str(c.get("text") or "") for c in content
-                                        if isinstance(c, dict) and c.get("type") == "text")
-                    else:
-                        continue
-                    text = re.sub(r"<(system-reminder|ide_)[^>]*>.*?</\\1>", "", text, flags=re.S)
-                    text = text.strip()
-                    if text and not text.startswith(("<command-", "Caveat:", "This session")):
-                        users.append(_redact(text[:200]))
-                elif t == "assistant":
-                    for c in (msg.get("content") or []):
-                        if not isinstance(c, dict) or c.get("type") != "tool_use":
-                            continue
-                        name = c.get("name") or ""
-                        inp = c.get("input") or {}
-                        if name in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
-                            p = inp.get("file_path") or inp.get("notebook_path") or ""
-                            if p:
-                                files.append("{0} {1}".format(name, p))
-                        elif name == "Bash":
-                            cmd = str(inp.get("command") or "")
-                            if cmd_re.search(cmd):
-                                cmds.append(_redact(cmd.split("\n")[0][:160]))
-    except OSError:
-        pass
-    return users[-MAX_USER_LINES:], files[-MAX_EDIT_FILES:], cmds[-MAX_CMDS:]
+def _transcript_facts(transcript, driver=""):
+    """Mechanical transcript extraction, driver-aware (claude/devin/generic —
+    see drivers.py). All output is redacted before it can reach a file."""
+    users, files, cmds = drivers.extract_facts(
+        transcript, driver=driver or drivers.detect(transcript))
+    return ([_redact(u) for u in users], files, [_redact(c) for c in cmds])
 
 
 def _ctx_pointer(cwd=""):
@@ -216,7 +175,8 @@ def build(payload, root=None, now=None):
             lines.append("- `{0}`: {1}".format(d, _git(d)))
     lines += ["- " + s for s in _services(root)]
     lines.append("")
-    users, files, cmds = _transcript_facts(payload.get("transcript_path") or "")
+    ref = str(payload.get("transcript_path") or payload.get("session_db") or "")
+    users, files, cmds = _transcript_facts(ref, driver=str(payload.get("agent") or ""))
     lines.append("## " + _L("What this window did (mechanical)", "本窗口做过的事（机械抽取）"))
     lines.append("### " + _L("Recent user messages", "用户最近的话"))
     lines += ["- " + u.replace("\n", " ") for u in users] or ["- " + _L("(none extracted)", "（抽不到）")]

@@ -197,7 +197,8 @@ def build(payload, root=None, now=None):
     lines.append("- " + _L("Ask the library: `memory_recall` (keywords / dates)",
                          "细节问库：`memory_recall`（关键词 / 日期段）"))
     lines.append("- " + _L("This file: `{0}`", "本份全文：`{0}`").format(
-        handoff_dir(payload) / ("handoff-auto-{0}.md".format(ts))))
+        handoff_dir(payload) / str(payload.get("handoff_name")
+                                   or "handoff-auto-{0}.md".format(ts))))
     return "\n".join(lines)
 
 

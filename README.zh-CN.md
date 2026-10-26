@@ -6,7 +6,7 @@
 
 **不止 Claude Code**：MCP 那半任何吃 MCP 的 agent 都能挂；钩子那半是
 stdin-JSON 小协议，`drivers.py` 管 transcript 格式适配——现成驱动有
-Claude Code 和 Devin CLI，通用 jsonl 兜底。没钩子的 agent 直接跑
+Claude Code、Devin CLI 和 Codex，通用 jsonl 兜底。没钩子的 agent 直接跑
 `bin/tidemark handoff|inject|waterline` 手动走仪式。
 
 - **context-mode** 管「东西不进窗」：大输出进它的 SQLite 沙箱，`ctx_*` 工具随查随取。
@@ -68,6 +68,15 @@ git clone <本 repo> && cd tidemark
 | `sync-dirs.conf` | — | 额外 md 目录同步进库（kind=note） |
 | `tail-src.md` | — | 「在途与待核」尾段的源 |
 | `TIDEMARK_CTX_SESSIONS` | `~/.claude/context-mode/sessions` | context-mode 沙箱库目录 |
+
+## 其它 agent
+
+| Agent | 能用什么 | 怎么接 |
+|---|---|---|
+| Claude Code | 全部 | `./install.sh`（hooks + MCP） |
+| Devin CLI | MCP + `bin/tidemark` 手动仪式 | `mcp_config.json` 挂 tidemark；transcript 读 `sessions.db`（`--agent devin` 或 `.db` 路径自动识别） |
+| Codex | `notify` 驱动的轮末交接 | `~/.codex/config.toml` 加 `notify = ["python3", "/path/to/tidemark/tidemark/codex_wrap.py", "turn-end"]`——每轮结束刷新 `handoff-codex-<sid>.md` 并入库；`codex_wrap.py inject` 打印最新交接供粘贴，`waterline` 模式看用量。`~/.codex/sessions/**/rollout-*.jsonl` 自动识别 |
+| 其它 | 库 + CLI | `store.py ingest/recall`、`bin/tidemark sync` |
 
 ## 边界
 

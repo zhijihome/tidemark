@@ -190,6 +190,94 @@ def _devin_facts(ref):
     return users[-MAX_USER_LINES:], files[-MAX_EDIT_FILES:], cmds[-MAX_CMDS:]
 
 
+# ---------- codex (rollout jsonl) ----------
+# ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
+# ctx: last event_msg payload.type=="token_count" ->
+#      info.last_token_usage.input_tokens
+# facts: response_item payloads — message(role=user, content[{type:input_text}]),
+#        function_call{name, arguments-json},
+#        custom_tool_call{name, input-js-call like tools.exec_command({cmd:"..."})}
+
+def _codex_lines(ref):
+    try:
+        with open(ref, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except ValueError:
+                    continue
+    except OSError:
+        return
+
+
+def _codex_ctx(ref):
+    ctx = 0
+    for e in _codex_lines(ref):
+        if e.get("type") != "event_msg":
+            continue
+        p = e.get("payload")
+        if isinstance(p, dict) and p.get("type") == "token_count":
+            last = (p.get("info") or {}).get("last_token_usage") or {}
+            ctx = int(last.get("input_tokens") or 0)
+    return ctx
+
+
+def _codex_cmd_from_input(text):
+    """Pull cmd:"..." out of a js-style tool call body like
+    text(await tools.exec_command({cmd:"git status","max_output_tokens":7}))"""
+    m = re.search(r'cmd\s*:\s*"((?:[^"\\]|\\.)*)"', text or "")
+    if not m:
+        return ""
+    try:
+        return json.loads('"' + m.group(1) + '"')
+    except ValueError:
+        return m.group(1)
+
+
+def _codex_facts(ref):
+    users, files, cmds = [], [], []
+    for e in _codex_lines(ref):
+        if e.get("type") != "response_item":
+            continue
+        p = e.get("payload")
+        if not isinstance(p, dict):
+            continue
+        pt = p.get("type")
+        if pt == "message" and p.get("role") == "user":
+            for part in (p.get("content") or []):
+                if not isinstance(part, dict):
+                    continue
+                if part.get("type") not in ("input_text", "text"):
+                    continue
+                t = str(part.get("text") or "").strip()
+                if not t or t.startswith("<"):  # injected env/plugin wrappers
+                    continue
+                for ln in t.split("\n"):
+                    ln = ln.strip()
+                    if ln and not ln.startswith(("<", "#")):
+                        users.append(ln[:200])
+        elif pt == "function_call":
+            try:
+                args = json.loads(p.get("arguments") or "{}")
+            except ValueError:
+                args = {}
+            _push_tool(p.get("name") or "", args if isinstance(args, dict) else {},
+                       files, cmds)
+        elif pt == "custom_tool_call":
+            name = p.get("name") or ""
+            inp = p.get("input") or ""
+            if name in _SHELL_TOOLS or "exec_command" in inp:
+                c = _codex_cmd_from_input(inp)
+                if c and _CMD_RE.search(c):
+                    cmds.append(c.split("\n")[0][:160])
+            for m in re.finditer(r"\*\*\* (?:Update|Add|Delete) File: (\S+)", inp):
+                files.append("apply_patch " + m.group(1))
+    return users[-MAX_USER_LINES:], files[-MAX_EDIT_FILES:], cmds[-MAX_CMDS:]
+
+
 # ---------- generic jsonl (best effort) ----------
 
 def _generic_facts(transcript):
@@ -229,8 +317,20 @@ def _generic_ctx(transcript):
 _DRIVERS = {
     "claude": (_cc_ctx, _cc_facts),
     "devin": (_devin_ctx, _devin_facts),
+    "codex": (_codex_ctx, _codex_facts),
     "generic": (_generic_ctx, _generic_facts),
 }
+
+
+def _is_codex_rollout(path):
+    """Codex rollouts are named rollout-*.jsonl under ~/.codex/sessions;
+    when the name doesn't give it away, sniff the first line's type."""
+    if os.path.basename(path).startswith("rollout-"):
+        return True
+    for e in _codex_lines(path):
+        return e.get("type") in ("session_meta", "turn_context",
+                                 "token_usage_record")
+    return False
 
 
 def detect(ref="", payload=None):
@@ -242,6 +342,8 @@ def detect(ref="", payload=None):
     if r.startswith("devin:") or r.endswith((".db", ".sqlite", ".sqlite3")):
         return "devin"
     if r.endswith(".jsonl"):
+        if _is_codex_rollout(r):
+            return "codex"
         return "claude"   # CC transcripts are the common case for this shape
     return "generic"
 
@@ -268,5 +370,10 @@ def find_latest_transcript(payload=None):
     if r and Path(r).is_file():
         return r
     hits = sorted(glob.glob(str(Path.home() / ".claude/projects/*/*.jsonl")),
+                  key=os.path.getmtime, reverse=True)
+    if hits:
+        return hits[0]
+    hits = sorted(glob.glob(str(Path.home() /
+                                ".codex/sessions/*/*/*/rollout-*.jsonl")),
                   key=os.path.getmtime, reverse=True)
     return hits[0] if hits else ""

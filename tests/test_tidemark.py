@@ -64,6 +64,53 @@ class DevinDriverTests(unittest.TestCase):
         self.assertEqual(drivers.detect("", {"agent": "devin"}), "devin")
 
 
+class CodexDriverTests(unittest.TestCase):
+    """Codex transcript = ~/.codex/sessions/*/*/*/rollout-*.jsonl"""
+
+    def _rollout(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        f = str(Path(tmp.name) / "rollout-2026-10-11T06-23-20-deadbeef-0000-0000-0000-000000000000.jsonl")
+        lines = [
+            {"type": "session_meta", "payload": {"session_id": "deadbeef",
+                                                 "cwd": "/x/proj"}},
+            {"type": "response_item", "payload": {
+                "type": "message", "role": "user", "content": [
+                    {"type": "input_text", "text": "wire the notify hook"}]}},
+            {"type": "response_item", "payload": {
+                "type": "custom_tool_call", "name": "exec",
+                "input": 'text(await tools.exec_command({cmd:"git status"}));'}},
+            {"type": "response_item", "payload": {
+                "type": "function_call", "name": "apply_patch",
+                "arguments": '{"file_path": "/x/codex_wrap.py"}'}},
+            {"type": "event_msg", "payload": {
+                "type": "token_count",
+                "info": {"last_token_usage": {"input_tokens": 40166},
+                         "model_context_window": 258400}}},
+            {"type": "event_msg", "payload": {
+                "type": "token_count",
+                "info": {"last_token_usage": {"input_tokens": 88123},
+                         "model_context_window": 258400}}},
+        ]
+        Path(f).write_text("\n".join(json.dumps(e) for e in lines))
+        return f
+
+    def test_codex_ctx_uses_last_token_count(self):
+        self.assertEqual(drivers.latest_ctx(self._rollout(), driver="codex"),
+                         88123)
+
+    def test_codex_facts(self):
+        users, files, cmds = drivers.extract_facts(self._rollout(),
+                                                 driver="codex")
+        self.assertIn("wire the notify hook", users[0])
+        self.assertTrue(any("codex_wrap.py" in f for f in files))
+        self.assertTrue(any("git status" in c for c in cmds))
+
+    def test_detect_rollout_is_codex(self):
+        self.assertEqual(drivers.detect(self._rollout()), "codex")
+        self.assertEqual(drivers.detect("", {"agent": "codex"}), "codex")
+
+
 class StoreTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

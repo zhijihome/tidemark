@@ -85,7 +85,8 @@ outputs older than N days (sandbox kind only — memory/handoffs are kept).
 |---|---|---|
 | Claude Code | everything | `./install.sh` (hooks + MCP) |
 | Devin CLI | MCP tools + `bin/tidemark` ritual | add `tidemark` to `mcp_config.json`; transcripts are read from `sessions.db` (`--agent devin` or a `.db` path auto-detects) |
-| Gemini CLI / Codex | MCP + manual ritual | register the MCP; call `bin/tidemark handoff` on `/clear`-equivalents until a driver lands |
+| Codex CLI | turn-end handoffs via `notify` | in `~/.codex/config.toml`: `notify = ["python3", "/path/to/tidemark/tidemark/codex_wrap.py", "turn-end"]` — every turn refresh keeps `handoff-codex-<sid>.md` + the store entry current; `codex_wrap.py inject` prints the newest handoff to paste into a fresh session; `waterline` mode prints ctx fill. Rollouts under `~/.codex/sessions/**/rollout-*.jsonl` auto-detect. |
+| Gemini CLI | MCP + manual ritual | register the MCP; call `bin/tidemark handoff` on `/clear`-equivalents until a driver lands |
 | anything else | library + CLI | `store.py ingest/recall`, `bin/tidemark sync` |
 
 Drivers live in `tidemark/drivers.py`: implement `latest_ctx` + `extract_facts`

@@ -9,7 +9,13 @@ session-id/cwd on recent builds).
 Wire it:
 
     # ~/.codex/config.toml
-    notify = ["python3", "/path/to/tidemark/codex_wrap.py", "turn-end"]
+    notify = ["python3", "/path/to/tidemark/tidemark/codex_wrap.py", "turn-end"]
+
+If the notify slot is already taken (e.g. Codex Computer Use), chain it —
+everything after `--` is invoked with the same JSON appended last:
+
+    notify = ["python3", "/path/to/codex_wrap.py", "turn-end", "--",
+              "/original/program", "original-arg"]
 
 Modes:
   turn-end    notify callback — refresh this session's handoff file + store
@@ -42,15 +48,32 @@ def _rollouts():
 
 
 def _notify_json(argv):
-    """Codex passes the notification as the last argv element (a JSON string)."""
+    """Codex passes the notification as the last argv element (a JSON string).
+    Returns (parsed_dict, raw_json_string)."""
     for a in reversed(argv):
         try:
             p = json.loads(a)
             if isinstance(p, dict):
-                return p
+                return p, a
         except (ValueError, TypeError):
             continue
-    return {}
+    return {}, ""
+
+
+def _forward(argv, raw_json):
+    """Everything after `--` names a program to chain: it gets its own args
+    plus the notification JSON appended last, like codex would call it."""
+    if "--" not in argv:
+        return
+    forward = argv[argv.index("--") + 1:]
+    if not forward:
+        return
+    try:
+        import subprocess
+        subprocess.Popen(forward + ([raw_json] if raw_json else []),
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
 
 
 def _find_rollout(notify):
@@ -120,7 +143,9 @@ def main():
     which = sys.argv[1] if len(sys.argv) > 1 else ""
     try:
         if which == "turn-end":
-            _turn_end(_notify_json(sys.argv[2:]))
+            notify, raw = _notify_json(sys.argv[2:])
+            _turn_end(notify)
+            _forward(sys.argv[2:], raw)
         elif which == "waterline":
             _waterline()
         elif which == "inject":

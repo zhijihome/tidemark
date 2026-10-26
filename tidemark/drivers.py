@@ -253,7 +253,13 @@ def _codex_facts(ref):
                 if part.get("type") not in ("input_text", "text"):
                     continue
                 t = str(part.get("text") or "").strip()
-                if not t or t.startswith("<"):  # injected env/plugin wrappers
+                # skip injected blobs: env/plugin xml wrappers and the
+                # AGENTS.md instructions block Codex prepends to the first
+                # user turn — they aren't things the user said
+                if (not t or t.startswith("<")
+                        or t.startswith("# AGENTS.md")
+                        or "<INSTRUCTIONS>" in t
+                        or "<user_instructions>" in t):
                     continue
                 for ln in t.split("\n"):
                     ln = ln.strip()

@@ -76,6 +76,13 @@ class CodexDriverTests(unittest.TestCase):
                                                  "cwd": "/x/proj"}},
             {"type": "response_item", "payload": {
                 "type": "message", "role": "user", "content": [
+                    {"type": "input_text",
+                     "text": "# AGENTS.md instructions\n\n<INSTRUCTIONS>\n"
+                             "- do the thing\n- never break prod\n"
+                             "</INSTRUCTIONS>"},
+                    {"type": "input_text",
+                     "text": "<environment_context><cwd>/x</cwd>"
+                             "</environment_context>"},
                     {"type": "input_text", "text": "wire the notify hook"}]}},
             {"type": "response_item", "payload": {
                 "type": "custom_tool_call", "name": "exec",

@@ -88,9 +88,13 @@ git clone <本 repo> && cd tidemark
 `AGENTS.md`——往 `~/.codex/AGENTS.md` 加一段即可近似自动注入：
 
 ```markdown
-## Session bootstrap
-每次会话开始先跑 `python3 ~/tidemark/codex_wrap.py inject`，
-把输出当上个窗口的交接读完再干活。
+## Session bootstrap（tidemark 潮痕）
+- 每次会话开始：先跑 `python3 ~/tidemark/codex_wrap.py inject`，
+  把输出当上个窗口的交接读完再干活；提示无交接就直接开工。
+- 每个 turn 结束自动刷新 `~/.tidemark/handoffs/handoff-codex-<会话id>.md`，
+  不用管。
+- 想看当前上下文用量：`python3 ~/tidemark/codex_wrap.py waterline`。
+  快到线就开新窗，按上面交接续。
 ```
 
 ## 边界

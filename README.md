@@ -96,12 +96,16 @@ checks and the `install.sh` bash installer (configure hooks by hand on
 Windows).
 
 **Codex semi-auto injection**: Codex has no SessionStart hook, but it reads
-`AGENTS.md` every session — add a bootstrap line to `~/.codex/AGENTS.md`:
+`AGENTS.md` every session — add a bootstrap block to `~/.codex/AGENTS.md`:
 
 ```markdown
-## Session bootstrap
-At session start run `python3 ~/tidemark/codex_wrap.py inject` and read the
-output as the previous window's handoff before working.
+## Session bootstrap (tidemark)
+- At session start run `python3 ~/tidemark/codex_wrap.py inject` and read the
+  output as the previous window's handoff; if none, just start.
+- Turn-ends auto-refresh `~/.tidemark/handoffs/handoff-codex-<sid>.md`
+  (mechanical summary of what was done) — no action needed.
+- Check context usage any time: `python3 ~/tidemark/codex_wrap.py waterline`.
+  Near the line → new window → continue from the handoff.
 ```
 | anything else | library + CLI | `store.py ingest/recall`, `bin/tidemark sync` |
 

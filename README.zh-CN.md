@@ -78,6 +78,21 @@ git clone <本 repo> && cd tidemark
 | Codex | `notify` 驱动的轮末交接 | `~/.codex/config.toml` 加 `notify = ["python3", "/path/to/tidemark/tidemark/codex_wrap.py", "turn-end"]`——每轮结束刷新 `handoff-codex-<sid>.md` 并入库；`codex_wrap.py inject` 打印最新交接供粘贴，`waterline` 模式看用量。`~/.codex/sessions/**/rollout-*.jsonl` 自动识别 |
 | 其它 | 库 + CLI | `store.py ingest/recall`、`bin/tidemark sync` |
 
+**跨平台**：全部纯 Python 标准库，macOS/Linux/Windows 通用。Windows 上用
+`python` 调脚本（不吃 shebang）：config.toml 写
+`notify = ["python", "C:\\path\\to\\codex_wrap.py", "turn-end"]`。
+仅有两个平台相关件且都是可选：`services.conf` 的 `launchd:` 探活、
+`install.sh` bash 安装器（Windows 手写配置即可）。
+
+**Codex 半自动续接**：Codex 没有 SessionStart 钩子，但每窗必读
+`AGENTS.md`——往 `~/.codex/AGENTS.md` 加一段即可近似自动注入：
+
+```markdown
+## Session bootstrap
+每次会话开始先跑 `python3 ~/tidemark/codex_wrap.py inject`，
+把输出当上个窗口的交接读完再干活。
+```
+
 ## 边界
 
 库只碰自己的目录；`resident='tidemark'` 硬闸——库里混进别家行直接拒用。

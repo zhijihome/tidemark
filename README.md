@@ -87,6 +87,22 @@ outputs older than N days (sandbox kind only — memory/handoffs are kept).
 | Devin CLI | MCP tools + `bin/tidemark` ritual | add `tidemark` to `mcp_config.json`; transcripts are read from `sessions.db` (`--agent devin` or a `.db` path auto-detects) |
 | Codex CLI | turn-end handoffs via `notify` | in `~/.codex/config.toml`: `notify = ["python3", "/path/to/tidemark/tidemark/codex_wrap.py", "turn-end"]` — every turn refresh keeps `handoff-codex-<sid>.md` + the store entry current; `codex_wrap.py inject` prints the newest handoff to paste into a fresh session; `waterline` mode prints ctx fill. Rollouts under `~/.codex/sessions/**/rollout-*.jsonl` auto-detect. |
 | Gemini CLI | MCP + manual ritual | register the MCP; call `bin/tidemark handoff` on `/clear`-equivalents until a driver lands |
+
+**Cross-platform**: everything is stdlib-only Python — macOS/Linux/Windows
+all work. On Windows call the scripts via `python` (no shebang): in
+`config.toml` use `notify = ["python", "C:\\path\\to\\codex_wrap.py", "turn-end"]`.
+The only platform-gated pieces are optional: `services.conf`'s `launchd:`
+checks and the `install.sh` bash installer (configure hooks by hand on
+Windows).
+
+**Codex semi-auto injection**: Codex has no SessionStart hook, but it reads
+`AGENTS.md` every session — add a bootstrap line to `~/.codex/AGENTS.md`:
+
+```markdown
+## Session bootstrap
+At session start run `python3 ~/tidemark/codex_wrap.py inject` and read the
+output as the previous window's handoff before working.
+```
 | anything else | library + CLI | `store.py ingest/recall`, `bin/tidemark sync` |
 
 Drivers live in `tidemark/drivers.py`: implement `latest_ctx` + `extract_facts`

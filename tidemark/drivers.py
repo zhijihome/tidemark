@@ -273,7 +273,8 @@ def _codex_facts(ref):
                 c = _codex_cmd_from_input(inp)
                 if c and _CMD_RE.search(c):
                     cmds.append(c.split("\n")[0][:160])
-            for m in re.finditer(r"\*\*\* (?:Update|Add|Delete) File: (\S+)", inp):
+            for m in re.finditer(r"\*\*\* (?:Update|Add|Delete) File: ([^\s\\]+)",
+                                 inp):
                 files.append("apply_patch " + m.group(1))
     return users[-MAX_USER_LINES:], files[-MAX_EDIT_FILES:], cmds[-MAX_CMDS:]
 

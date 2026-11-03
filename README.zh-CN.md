@@ -20,7 +20,7 @@ Claude Code、Devin CLI 和 Codex，通用 jsonl 兜底。没钩子的 agent 直
 |---|---|---|
 | `waterline.py` | `UserPromptSubmit` | 每轮扫 transcript 真实 token 用量，过线就往上下文塞一句「该 /clear 了」——每窗只喊一次，跌回 80% 重新武装 |
 | `handoff.py` | `PreCompact` + `SessionEnd(clear)` | 机械抽取本窗做的事（用户话/改的文件/git 现场/服务探活）写成 `handoff-auto-<ts>.md` 并入库 |
-| `inject.py` | `SessionStart` | 开窗/压缩/clear 后把最新交接+在途尾段塞进新窗上下文 |
+| `inject.py` | `SessionStart` | 开窗/压缩/clear 后把最新交接+在途尾段塞进新窗上下文；交接写完后同项目还有别的窗在干活，就加一句提醒（几个窗、最后几点），新窗知道自己可能落后了 |
 | `recall_mcp.py` | stdio MCP | `memory_recall` / `memory_stats` 查库，外加自带沙箱：`sandbox_exec` 跑命令、大输出整存进库只回前段+引用，`sandbox_get` 按需取回。**单装即完整**，context-mode 是选配不是依赖 |
 | `store.py` | 库+CLI | SQLite FTS5 **trigram 分词**——中文子串真能查（unicode61 查不到「新版本」）；段落级存储、幂等、隔离硬闸 |
 | `sync.py` | cron/手动 | 喂库：CC 记忆文件、交接档、任意 md 目录、tail 尾段缓存 |
@@ -68,6 +68,7 @@ git clone <本 repo> && cd tidemark
 | `sync-dirs.conf` | — | 额外 md 目录同步进库（kind=note） |
 | `tail-src.md` | — | 「在途与待核」尾段的源 |
 | `TIDEMARK_CTX_SESSIONS` | `~/.claude/context-mode/sessions` | context-mode 沙箱库目录 |
+| `TIDEMARK_ACTIVITY_GLOB` | 新会话记录旁边的 `*.jsonl` | 哪些会话记录算「交接之后还在干活」，用于落后提醒；别的窗住在另一个配置目录时指过去 |
 
 ## 其它 agent
 

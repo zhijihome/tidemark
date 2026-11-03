@@ -28,7 +28,7 @@ No model calls anywhere. Every piece is stdlib-only Python.
 |---|---|---|
 | `waterline.py` | `UserPromptSubmit` | Reads real token usage off the transcript each turn; once past the line, injects a one-line "wrap up and `/clear`" reminder — once per crossing, rearms below 80%. |
 | `handoff.py` | `PreCompact` + `SessionEnd(clear)` | Mechanically extracts the window's work (recent user asks, files touched, git/ops commands, watch-dir git status, service checks) into `handoff-auto-<ts>.md` and ingests it. |
-| `inject.py` | `SessionStart` | On startup/compact/clear, injects the latest handoff + open-threads tail into the fresh window. |
+| `inject.py` | `SessionStart` | On startup/compact/clear, injects the latest handoff + open-threads tail into the fresh window. If other windows in the same project kept working after that handoff, adds a one-line heads-up (how many, last activity) so the new window knows it may be behind. |
 | `recall_mcp.py` | stdio MCP | `memory_recall` / `memory_stats` over the library, plus a self-contained artifact sandbox: `sandbox_exec` runs a command and stores big output in the db (you get back a head + ref), `sandbox_get` pages it back. Standalone-complete — context-mode optional, not required. |
 | `store.py` | library + CLI | SQLite FTS5 (**trigram** — CJK substring search actually works), paragraph-sized segments, idempotent upserts, hard `resident` isolation guard. |
 | `sync.py` | cron / manual | Feeds the library: Claude Code memory files, handoff files, arbitrary `.md` dirs, and the `tail.md` open-threads cache. |
@@ -78,6 +78,7 @@ outputs older than N days (sandbox kind only — memory/handoffs are kept).
 | `sync-dirs.conf` | — | extra `.md` dirs synced into the library as `kind=note`. |
 | `tail-src.md` | — | source for the open-threads `tail.md` cache. |
 | `TIDEMARK_CTX_SESSIONS` | `~/.claude/context-mode/sessions` | where context-mode session DBs live. |
+| `TIDEMARK_ACTIVITY_GLOB` | `*.jsonl` next to the new session's transcript | which transcripts count as "kept working after the handoff" for the staleness heads-up. Point it elsewhere if your other windows live in another config dir. |
 
 ## Other agents
 

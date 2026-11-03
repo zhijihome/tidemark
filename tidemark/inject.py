@@ -5,11 +5,18 @@ fresh window's context.
 Recommended matcher "startup|compact|clear" (skip `resume` — a resumed session
 already carries its own context). stdout becomes the injected text; when
 nothing exists yet it prints a one-line pointer — never errors, never stalls.
+
+Staleness note: a handoff is only written when a window ends. If another window
+kept working after it (a long-running session elsewhere, a second terminal),
+the new window would wake up behind. So after injecting, we look at transcripts
+in the same project (the new session's transcript dir, or TIDEMARK_ACTIVITY_GLOB)
+that changed after the handoff, and say how many and when the last one moved.
 """
 import glob
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -36,6 +43,28 @@ def _latest_handoff(payload):
     return files[0] if files else ""
 
 
+def _activity_after(handoff, payload):
+    """Transcripts (other than this new session's) that moved after the handoff.
+
+    Returns (count, latest_mtime). Looks at TIDEMARK_ACTIVITY_GLOB if set, else
+    the *.jsonl next to payload["transcript_path"]. Anything unreadable → (0, 0).
+    """
+    pattern = os.environ.get("TIDEMARK_ACTIVITY_GLOB") or ""
+    own = str(payload.get("transcript_path") or "")
+    if not pattern and own:
+        pattern = str(Path(own).parent / "*.jsonl")
+    if not pattern:
+        return 0, 0.0
+    try:
+        since = os.path.getmtime(handoff)
+        own_real = os.path.realpath(own) if own else ""
+        moved = [os.path.getmtime(p) for p in glob.glob(os.path.expanduser(pattern))
+                 if os.path.realpath(p) != own_real and os.path.getmtime(p) > since + 1]
+    except OSError:
+        return 0, 0.0
+    return len(moved), max(moved, default=0.0)
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
@@ -48,6 +77,12 @@ def main():
     if f:
         body = Path(f).read_text(encoding="utf-8", errors="replace")[:MAX_HANDOFF_CHARS]
         out.append("— latest handoff `{0}`:\n{1}".format(Path(f).name, body))
+        n, last = _activity_after(f, payload)
+        if n:
+            out.append("— heads-up: {0} other window(s) kept working after this handoff "
+                       "(last activity {1}); it may be behind. Check recent work via "
+                       "`memory_recall` before relying on it.".format(
+                           n, time.strftime("%Y-%m-%d %H:%M", time.localtime(last))))
     else:
         out.append("— no handoff file yet.")
     tail = Path(root) / "tail.md"

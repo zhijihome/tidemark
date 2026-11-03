@@ -247,6 +247,41 @@ class InjectTests(unittest.TestCase):
         self.assertIn("HANDOFF BODY AAA", proc.stdout)
         self.assertIn("memory_recall", proc.stdout)
 
+    def _inject_with_transcripts(self, later_others):
+        """handoff at t=1000; this session's transcript + `later_others` other ones after it."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        d = Path(tmp.name)
+        h = d / "handoff-auto-2026-11-03-1200.md"
+        h.write_text("# HANDOFF")
+        os.utime(h, (1000, 1000))
+        proj = d / "projects"
+        proj.mkdir()
+        own = proj / "new-session.jsonl"
+        own.write_text("{}")
+        os.utime(own, (5000, 5000))          # the new window itself never counts
+        old = proj / "before.jsonl"
+        old.write_text("{}")
+        os.utime(old, (900, 900))            # moved before the handoff: not stale
+        for i in range(later_others):
+            p = proj / "other-{0}.jsonl".format(i)
+            p.write_text("{}")
+            os.utime(p, (2000 + i, 2000 + i))
+        env = dict(os.environ, TIDEMARK_HOME=str(d / "mem"), TIDEMARK_HANDOFF_DIR=str(d))
+        env.pop("TIDEMARK_ACTIVITY_GLOB", None)
+        return subprocess.run(
+            [sys.executable, str(RELAY / "inject.py")],
+            input=json.dumps({"source": "clear", "cwd": str(d), "transcript_path": str(own)}),
+            capture_output=True, text=True, env=env, timeout=30).stdout
+
+    def test_inject_flags_handoff_behind_other_windows(self):
+        out = self._inject_with_transcripts(2)
+        self.assertIn("2 other window(s) kept working", out)
+
+    def test_inject_quiet_when_handoff_is_current(self):
+        out = self._inject_with_transcripts(0)
+        self.assertNotIn("heads-up", out)
+
 
 class SyncTests(unittest.TestCase):
     def setUp(self):
